@@ -1,16 +1,50 @@
-# This is a sample Python script.
+import hashlib
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+from flask import Flask, request, render_template
+from flask_wtf import FlaskForm
+from flask_wtf.csrf import CSRFProtect
+import binascii
+from forms import RegistrationForm
+from models import db, User
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'f3c26108e4e0747b5bada82bc68cf60c8ff47ab27974fca8693ccd00043a4f68'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///users2.db'
+db.init_app(app)
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+@app.cli.command("init-db")
+def init_db():
+    db.create_all()
 
 
-# Press the green button in the gutter to run the script.
+@app.route('/register/', methods=['GET', 'POST'])
+def register():
+    form = RegistrationForm()
+    if request.method == 'POST' and form.validate():
+        username = form.username.data
+        email = form.email.data
+        password = form.password.data
+        dk = hashlib.pbkdf2_hmac(hash_name='sha256',
+                                 password=bytes(password, 'utf-8'),
+                                 salt=b'bad_salt',
+                                 iterations=100000)
+
+        password = binascii.hexlify(dk)
+        new_user = User(username=username, email=email, password=password)
+        db.session.add(new_user)
+        db.session.commit()
+        return render_template('success.html', username=username, email=email)
+
+    return render_template('register.html', form=form)
+
+
+@app.route('/users/', methods=['POST', 'GET'])
+def get_all_users():
+    users = User.query.all()
+    return f'{list(users)}'
+
+
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    app.run(debug=True)
